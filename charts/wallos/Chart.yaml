@@ -1,0 +1,18 @@
+apiVersion: v2
+name: wallos
+description: A Helm chart for Wallos subscription manager
+type: application
+version: 0.1.0
+appVersion: "2.41.0"
+home: https://github.com/vide/wallos-charts
+sources:
+  - https://github.com/ellite/wallos
+maintainers:
+  - name: Davide Ferrari
+    email: vide@fastmail.com
+keywords:
+  - subscription
+  - expenses
+  - finance
+  - self-hosted
+  - PHP

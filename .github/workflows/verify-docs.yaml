@@ -1,0 +1,29 @@
+name: Verify Helm Docs
+
+on:
+  pull_request:
+    paths:
+      - 'charts/*/values.yaml'
+      - 'charts/*/Chart.yaml'
+
+jobs:
+  verify-helm-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install helm-docs
+        run: |
+          wget -O helm-docs.deb https://github.com/norwoodj/helm-docs/releases/download/v1.11.0/helm-docs_1.11.0_linux_amd64.deb
+          sudo dpkg -i helm-docs.deb
+
+      - name: Generate docs
+        run: helm-docs
+
+      - name: Verify no changes
+        run: |
+          if [[ $(git status --porcelain) ]]; then
+            echo "Documentation is out of date. Please run helm-docs locally and commit changes."
+            git diff
+            exit 1
+          fi

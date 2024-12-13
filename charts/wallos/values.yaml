@@ -1,0 +1,61 @@
+# -- Image configuration
+image:
+  # -- Container image repository
+  repository: ghcr.io/ellite/wallos
+  # -- Container image tag
+  tag: latest
+  # -- Container image pull policy
+  pullPolicy: IfNotPresent
+
+# -- Number of replicas to deploy
+replicaCount: 1
+
+# -- Service configuration
+service:
+  # -- Service type (ClusterIP, NodePort, or LoadBalancer)
+  type: ClusterIP
+  # -- Service port
+  port: 80
+
+# -- Ingress configuration
+ingress:
+  # -- Enable ingress resource
+  enabled: false
+  # -- Ingress class name. Leave empty to use cluster default
+  className: ""
+  # -- Annotations for the ingress resource
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+
+  # -- Ingress hosts configuration
+  hosts:
+    - host: wallos.local
+      paths:
+        - path: /
+          pathType: Prefix
+
+# -- Persistence configuration
+persistence:
+  # -- Enable persistent storage
+  enabled: true
+  # -- Size of the persistent volume
+  size: 1Gi
+  # -- Storage class to use. Leave empty to use cluster default
+  storageClass: ""
+
+# -- Resource limits and requests for the pod
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# -- Additional environment variables
+# @default -- []
+env: []
+  # - name: TZ
+  #   value: UTC

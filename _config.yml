@@ -1,0 +1,4 @@
+---
+theme: jekyll-theme-slate  # This is a common theme for Helm repos
+title: Wallos Helm Charts
+description: Helm repository for Wallos app

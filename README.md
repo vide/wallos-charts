@@ -1,6 +1,6 @@
 # wallos-charts
 
-A Helm chart for the Wallos subscription manager
+A Helm chart for the Wallos subscription manager.
 
 ## Prerequisites
 

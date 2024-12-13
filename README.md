@@ -1,4 +1,4 @@
-# wallos
+# wallos-charts
 
 A Helm chart for the Wallos subscription manager
 

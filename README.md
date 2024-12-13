@@ -1,0 +1,159 @@
+# wallos
+
+A Helm chart for the Wallos subscription manager
+
+## Prerequisites
+
+- Kubernetes 1.19+
+- Helm 3.0+
+- PV provisioner support in the underlying infrastructure (if persistence is enabled)
+- Ingress controller (if ingress is enabled)
+
+## Installing the Chart
+
+1. Add the Helm repository:
+```bash
+helm repo add wallos https://vide.github.io/wallos-charts
+helm repo update
+```
+
+2. Install the chart:
+```bash
+# With default values
+helm install wallos wallos/wallos
+
+# With custom values file
+helm install wallos wallos/wallos -f values.yaml
+
+# Into a specific namespace
+helm install wallos wallos/wallos -n wallos --create-namespace
+```
+
+## Uninstalling the Chart
+
+To uninstall/delete the `wallos` deployment:
+```bash
+helm uninstall wallos
+```
+
+## Maintainers
+
+| Name | Email | Url |
+| ---- | ------ | --- |
+| Davide Ferrari | <vide@fastmail.com> | <https://github.com/vide/wallos-charts> |
+
+## Configuration
+
+## Values
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| env | list | [] | Additional environment variables |
+| image | object | `{"pullPolicy":"IfNotPresent","repository":"ghcr.io/ellite/wallos","tag":"latest"}` | Image configuration |
+| image.pullPolicy | string | `"IfNotPresent"` | Container image pull policy |
+| image.repository | string | `"ghcr.io/ellite/wallos"` | Container image repository |
+| image.tag | string | `"latest"` | Container image tag |
+| ingress | object | `{"annotations":{},"className":"","enabled":false,"hosts":[{"host":"wallos.local","paths":[{"path":"/","pathType":"Prefix"}]}]}` | Ingress configuration |
+| ingress.annotations | object | `{}` | Annotations for the ingress resource |
+| ingress.className | string | `""` | Ingress class name. Leave empty to use cluster default |
+| ingress.enabled | bool | `false` | Enable ingress resource |
+| ingress.hosts | list | `[{"host":"wallos.local","paths":[{"path":"/","pathType":"Prefix"}]}]` | Ingress hosts configuration |
+| persistence | object | `{"enabled":true,"size":"1Gi","storageClass":""}` | Persistence configuration |
+| persistence.enabled | bool | `true` | Enable persistent storage |
+| persistence.size | string | `"1Gi"` | Size of the persistent volume |
+| persistence.storageClass | string | `""` | Storage class to use. Leave empty to use cluster default |
+| replicaCount | int | `1` | Number of replicas to deploy |
+| resources | object | `{"limits":{"cpu":"500m","memory":"512Mi"},"requests":{"cpu":"100m","memory":"128Mi"}}` | Resource limits and requests for the pod |
+| service | object | `{"port":80,"type":"ClusterIP"}` | Service configuration |
+| service.port | int | `80` | Service port |
+| service.type | string | `"ClusterIP"` | Service type (ClusterIP, NodePort, or LoadBalancer) |
+
+## Usage Examples
+
+### Basic Installation
+```bash
+helm install wallos wallos/wallos
+```
+
+### With Custom Domain and Ingress
+```bash
+helm install wallos wallos/wallos \
+  --set ingress.enabled=true \
+  --set ingress.hosts[0].host=wallos.example.com
+```
+
+### With Environment Variables
+```bash
+helm install wallos wallos/wallos \
+  --set env[0].name=TZ \
+  --set env[0].value=Europe/Madrid
+```
+
+### With Persistence and Resource Limits
+```bash
+helm install wallos wallos/wallos \
+  --set persistence.enabled=true \
+  --set persistence.size=5Gi \
+  --set resources.requests.cpu=200m \
+  --set resources.requests.memory=256Mi \
+  --set resources.limits.cpu=500m \
+  --set resources.limits.memory=512Mi
+```
+
+## Development
+
+### Prerequisites for local development
+
+1. Install pre-commit:
+```bash
+# Using pip
+pip install pre-commit
+
+# Using brew
+brew install pre-commit
+```
+
+2. Install helm-docs:
+```bash
+# Using go
+go install github.com/norwoodj/helm-docs/cmd/helm-docs@latest
+
+# Using brew
+brew install norwoodj/tap/helm-docs
+```
+
+3. Setup pre-commit hooks:
+```bash
+pre-commit install
+```
+
+Now helm-docs will automatically run on every commit, ensuring documentation stays up to date.
+
+### Contributing
+1. Make your changes to Chart.yaml or values.yaml
+2. Documentation will be automatically updated on commit
+3. CI will verify documentation is up to date in pull requests
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Pod won't start**
+   - Check resource limits: `kubectl describe pod -l app=wallos`
+   - Verify PVC is bound (if persistence is enabled): `kubectl get pvc`
+
+2. **Can't access application**
+   - Verify service is running: `kubectl get svc`
+   - Check ingress configuration: `kubectl get ingress`
+
+3. **Environment variables issues**
+   - Check pod environment: `kubectl exec -it <pod-name> -- env`
+   - Verify values in deployment: `kubectl get deployment wallos -o yaml`
+
+4. **Documentation issues**
+   - If CI fails due to outdated documentation, run `helm-docs` locally
+   - Make sure pre-commit hooks are installed
+   - Verify helm-docs is installed and in your PATH
+
+----------------------------------------------
+Autogenerated from chart metadata using [helm-docs v1.14.2](https://github.com/norwoodj/helm-docs/releases/v1.14.2)

@@ -2,14 +2,13 @@ apiVersion: v2
 name: wallos
 description: A Helm chart for Wallos subscription manager
 type: application
-version: 0.1.0
+version: 0.1.1
 appVersion: "2.41.0"
-home: https://github.com/vide/wallos-charts
-sources:
-  - https://github.com/ellite/wallos
+home: https://github.com/ellite/wallos
 maintainers:
   - name: Davide Ferrari
     email: vide@fastmail.com
+    url: https://github.com/vide/wallos-charts
 keywords:
   - subscription
   - expenses

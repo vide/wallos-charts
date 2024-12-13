@@ -1,9 +1,10 @@
 ---
 repos:
   - repo: https://github.com/norwoodj/helm-docs
-    rev:  ""
+    rev:  "v1.14.2"
     hooks:
       - id: helm-docs
         args:
           # Make the tool search for charts only under the `charts` directory
-          - --chart-search-root=charts
+          - --template-files=README.md.gotmpl
+          - --output-file=../../README.md

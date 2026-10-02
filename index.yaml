@@ -1,6 +1,41 @@
 apiVersion: v1
 entries:
   wallos:
+  - annotations:
+      artifacthub.io/changes: |
+        - kind: fixed
+          description: Persist the paths Wallos actually uses (db/ and images/uploads/logos/); 0.x mounted an unused directory and lost all data on every restart
+        - kind: changed
+          description: Pin the image to appVersion instead of latest, Recreate strategy, health probes, standard app.kubernetes.io labels
+        - kind: added
+          description: Optional backup CronJob shipping a validated SQLite snapshot plus logos to any rclone backend
+    apiVersion: v2
+    appVersion: 5.8.3
+    created: "2026-10-02T09:01:09.419031487Z"
+    description: A Helm chart for the Wallos subscription manager, with persistent
+      storage and optional rclone backups.
+    digest: 49f0ce6f7f46a80e641137bc09ab1dfe42a0e1d183d0f51a164a8ce735acb418
+    home: https://github.com/vide/wallos-charts
+    icon: https://raw.githubusercontent.com/ellite/Wallos/main/images/icon/android-chrome-192x192.png
+    keywords:
+    - subscription
+    - expenses
+    - finance
+    - self-hosted
+    - PHP
+    kubeVersion: '>=1.27.0-0'
+    maintainers:
+    - email: vide@fastmail.com
+      name: Davide Ferrari
+      url: https://github.com/vide/wallos-charts
+    name: wallos
+    sources:
+    - https://github.com/vide/wallos-charts
+    - https://github.com/ellite/Wallos
+    type: application
+    urls:
+    - https://github.com/vide/wallos-charts/releases/download/wallos-1.0.0/wallos-1.0.0.tgz
+    version: 1.0.0
   - apiVersion: v2
     appVersion: 2.41.0
     created: "2024-12-13T13:23:06.654808257Z"
@@ -43,4 +78,4 @@ entries:
     urls:
     - https://github.com/vide/wallos-charts/releases/download/wallos-0.1.2/wallos-0.1.2.tgz
     version: 0.1.2
-generated: "2024-12-13T13:23:06.654843864Z"
+generated: "2026-10-02T09:01:09.419038356Z"

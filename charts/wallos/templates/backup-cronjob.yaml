@@ -1,0 +1,182 @@
+{{- if .Values.backup.enabled }}
+{{- if not .Values.persistence.enabled }}
+{{- fail "backup.enabled requires persistence.enabled: there is nothing durable to back up" }}
+{{- end }}
+{{- if not .Values.backup.destination }}
+{{- fail "backup.destination is required when backup.enabled (an rclone remote:path, e.g. b2:my-bucket/wallos)" }}
+{{- end }}
+{{- $fullname := include "wallos.fullname" . }}
+{{- $destination := .Values.backup.destination | trimSuffix "/" }}
+---
+# Nightly archive of everything Wallos persists: a consistent SQLite snapshot
+# (sqlite3 .backup, safe against the live app) plus the uploaded logos, as one
+# timestamped <fullname>-<UTC timestamp>.tar.gz.
+#
+# The snapshot is validated (integrity_check, schema present, tarball readable)
+# before anything is uploaded, so a broken database never replaces a good
+# backup. Uploads go through rclone, so any backend it supports works; the
+# remote is defined entirely by RCLONE_CONFIG_<NAME>_* variables from
+# backup.env / backup.envFrom. Retention is left to the backend (e.g. bucket
+# lifecycle rules) unless backup.retention.minAge is set.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ $fullname }}-backup
+  labels:
+    {{- include "wallos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  timeZone: {{ .Values.backup.timeZone | default .Values.timezone | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: {{ .Values.backup.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .Values.backup.failedJobsHistoryLimit }}
+  jobTemplate:
+    spec:
+      backoffLimit: {{ .Values.backup.backoffLimit }}
+      activeDeadlineSeconds: {{ .Values.backup.activeDeadlineSeconds }}
+      template:
+        metadata:
+          # Deliberately NOT the app's selector labels, or the Service would
+          # start routing traffic to backup pods.
+          labels:
+            app.kubernetes.io/name: {{ include "wallos.name" . }}-backup
+            app.kubernetes.io/instance: {{ .Release.Name }}
+            app.kubernetes.io/component: backup
+        spec:
+          restartPolicy: Never
+          enableServiceLinks: false
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.backup.podSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          initContainers:
+            - name: snapshot
+              image: {{ include "wallos.image" . }}
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              {{- with .Values.backup.securityContext }}
+              securityContext:
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+              command:
+                - sh
+                - -c
+                - |
+                  set -eu
+                  ts=$(date -u +%Y%m%dT%H%M%SZ)
+                  stage=/work/stage
+                  archive="/work/out/${BACKUP_NAME}-${ts}.tar.gz"
+                  mkdir -p "$stage" /work/out
+
+                  echo ">> snapshotting /data/db/wallos.db"
+                  [ -s /data/db/wallos.db ] || { echo "!! no database found"; exit 1; }
+                  sqlite3 -readonly /data/db/wallos.db ".timeout 30000" ".backup $stage/wallos.db"
+
+                  echo ">> validating snapshot"
+                  check=$(sqlite3 "$stage/wallos.db" "PRAGMA integrity_check")
+                  [ "$check" = ok ] || { echo "!! integrity_check: $check"; exit 1; }
+                  users=$(sqlite3 "$stage/wallos.db" "SELECT count(*) FROM user")
+                  subs=$(sqlite3 "$stage/wallos.db" "SELECT count(*) FROM subscriptions")
+                  echo ">> snapshot holds $users user(s), $subs subscription(s)"
+
+                  echo ">> collecting logos"
+                  cp -a /data/logos "$stage/logos" 2>/dev/null || mkdir -p "$stage/logos"
+                  echo ">> $(find "$stage/logos" -type f | wc -l) logo file(s)"
+
+                  tar -czf "$archive" -C "$stage" wallos.db logos
+                  tar -tzf "$archive" wallos.db >/dev/null
+                  echo ">> archive $(basename "$archive"): $(stat -c%s "$archive") bytes"
+              env:
+                - name: BACKUP_NAME
+                  value: {{ $fullname | quote }}
+              {{- with .Values.backup.resources }}
+              resources:
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+              volumeMounts:
+                - name: data
+                  mountPath: /data
+                  readOnly: true
+                - name: work
+                  mountPath: /work
+          containers:
+            - name: upload
+              image: "{{ .Values.backup.rclone.image.repository }}:{{ .Values.backup.rclone.image.tag }}"
+              imagePullPolicy: {{ .Values.backup.rclone.image.pullPolicy }}
+              {{- with .Values.backup.securityContext }}
+              securityContext:
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+              command:
+                - sh
+                - -c
+                - |
+                  set -eu
+                  archive=$(ls /work/out/*.tar.gz)
+                  echo ">> uploading $(basename "$archive") to $BACKUP_DESTINATION/"
+                  rclone copyto -v "$@" "$archive" "$BACKUP_DESTINATION/$(basename "$archive")"
+                  {{- with .Values.backup.retention.minAge }}
+                  echo ">> pruning archives older than {{ . }}"
+                  rclone delete -v "$@" --min-age {{ . | quote }} --include "${BACKUP_NAME}-*.tar.gz" "$BACKUP_DESTINATION"
+                  {{- end }}
+                  echo ">> done"
+                - rclone
+                {{- range .Values.backup.rclone.extraArgs }}
+                - {{ . | quote }}
+                {{- end }}
+              env:
+                - name: BACKUP_NAME
+                  value: {{ $fullname | quote }}
+                - name: BACKUP_DESTINATION
+                  value: {{ $destination | quote }}
+                # No config file: the remote comes from RCLONE_CONFIG_* variables.
+                # /notfound is rclone's documented "in-memory config" sentinel.
+                - name: RCLONE_CONFIG
+                  value: /notfound
+                {{- with .Values.backup.env }}
+                {{- toYaml . | nindent 16 }}
+                {{- end }}
+              {{- with .Values.backup.envFrom }}
+              envFrom:
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+              {{- with .Values.backup.resources }}
+              resources:
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+              volumeMounts:
+                - name: work
+                  mountPath: /work
+          volumes:
+            {{- include "wallos.dataVolume" . | nindent 12 }}
+            - name: work
+              emptyDir:
+                sizeLimit: 1Gi
+          {{- with .Values.backup.nodeSelector | default .Values.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          affinity:
+            {{- if .Values.backup.affinity }}
+            {{- toYaml .Values.backup.affinity | nindent 12 }}
+            {{- else }}
+            # A ReadWriteOnce volume can only be mounted on the node that already
+            # runs Wallos, so go where the app is.
+            podAffinity:
+              preferredDuringSchedulingIgnoredDuringExecution:
+                - weight: 100
+                  podAffinityTerm:
+                    topologyKey: kubernetes.io/hostname
+                    labelSelector:
+                      matchLabels:
+                        {{- include "wallos.selectorLabels" . | nindent 24 }}
+            {{- end }}
+          {{- with .Values.backup.tolerations | default .Values.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+{{- end }}

@@ -1,61 +1,206 @@
-# -- Image configuration
+# -- Override the chart name
+nameOverride: ""
+# -- Override the full resource name (defaults to the release name, or `<release>-wallos`)
+fullnameOverride: ""
+
 image:
   # -- Container image repository
   repository: ghcr.io/ellite/wallos
-  # -- Container image tag
-  tag: latest
+  # -- Image tag. Defaults to the chart's `appVersion`; avoid `latest`, which
+  # makes every pod restart a silent, unreviewed upgrade
+  tag: ""
   # -- Container image pull policy
   pullPolicy: IfNotPresent
 
-# -- Number of replicas to deploy
-replicaCount: 1
+# -- Image pull secrets
+imagePullSecrets: []
 
-# -- Service configuration
+# -- Timezone for the app and its internal cron jobs (`TZ`), and default for `backup.timeZone`
+timezone: Etc/UTC
+
+# -- Extra environment variables, e.g. the OIDC_* or SSRF_ALLOWLIST settings
+# documented upstream, or PUID/PGID
+env: []
+  # - name: OIDC_ENABLED
+  #   value: "true"
+
+# -- Extra environment from Secrets/ConfigMaps (e.g. OIDC client credentials)
+envFrom: []
+  # - secretRef:
+  #     name: wallos-oidc
+
 service:
-  # -- Service type (ClusterIP, NodePort, or LoadBalancer)
+  # -- Service type
   type: ClusterIP
   # -- Service port
   port: 80
-
-# -- Ingress configuration
-ingress:
-  # -- Enable ingress resource
-  enabled: false
-  # -- Ingress class name. Leave empty to use cluster default
-  className: ""
-  # -- Annotations for the ingress resource
+  # -- Service annotations
   annotations: {}
-    # kubernetes.io/ingress.class: nginx
-    # kubernetes.io/tls-acme: "true"
-    # cert-manager.io/cluster-issuer: letsencrypt-prod
 
-  # -- Ingress hosts configuration
+ingress:
+  # -- Create an Ingress
+  enabled: false
+  # -- IngressClass name. Empty uses the cluster default
+  className: ""
+  # -- Ingress annotations
+  annotations: {}
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+  # -- Ingress hosts
   hosts:
     - host: wallos.local
       paths:
         - path: /
           pathType: Prefix
+  # -- Ingress TLS configuration
+  tls: []
+    # - secretName: wallos-tls
+    #   hosts:
+    #     - wallos.local
 
-# -- Persistence configuration
 persistence:
-  # -- Enable persistent storage
+  # -- Persist the database and uploaded logos. When disabled an emptyDir is
+  # used and ALL DATA IS LOST whenever the pod is replaced
   enabled: true
-  # -- Size of the persistent volume
-  size: 1Gi
-  # -- Storage class to use. Leave empty to use cluster default
+  # -- Use an existing PVC instead of creating one. It must contain (or will
+  # get) `db/` and `logos/` subdirectories
+  existingClaim: ""
+  # -- StorageClass. Empty uses the cluster default; `-` sets `storageClassName: ""`
   storageClass: ""
+  # -- Access modes
+  accessModes:
+    - ReadWriteOnce
+  # -- Volume size
+  size: 1Gi
+  # -- Annotate the PVC with `helm.sh/resource-policy: keep` so it survives
+  # `helm uninstall` and Argo CD app deletion
+  retain: true
+  # -- Extra PVC annotations
+  annotations: {}
 
-# -- Resource limits and requests for the pod
+# -- Pod resources. Wallos is a small PHP app; the memory limit guards the node
 resources:
   requests:
-    cpu: 100m
-    memory: 128Mi
+    cpu: 20m
+    memory: 64Mi
   limits:
-    cpu: 500m
-    memory: 512Mi
+    memory: 256Mi
 
-# -- Additional environment variables
-# @default -- []
-env: []
-  # - name: TZ
-  #   value: UTC
+# -- Startup probe. `/health.php` is a static 200 that touches neither the
+# database nor sessions. Allows ~2 minutes for the first-boot migrations and
+# exchange-rate refresh
+startupProbe:
+  httpGet:
+    path: /health.php
+    port: http
+  periodSeconds: 5
+  failureThreshold: 24
+# -- Liveness probe
+livenessProbe:
+  httpGet:
+    path: /health.php
+    port: http
+  periodSeconds: 30
+  timeoutSeconds: 3
+  failureThreshold: 3
+# -- Readiness probe
+readinessProbe:
+  httpGet:
+    path: /health.php
+    port: http
+  periodSeconds: 10
+  timeoutSeconds: 3
+
+# -- Pod security context. The upstream entrypoint must start as root: it
+# remaps the www-data UID/GID (PUID/PGID) and chowns the data directories
+podSecurityContext: {}
+# -- Container security context
+securityContext: {}
+
+# -- Extra pod annotations
+podAnnotations: {}
+# -- Extra pod labels
+podLabels: {}
+# -- Node selector
+nodeSelector: {}
+# -- Tolerations
+tolerations: []
+# -- Affinity
+affinity: {}
+
+backup:
+  # -- Enable the scheduled backup CronJob
+  enabled: false
+  # -- Cron schedule
+  schedule: "30 3 * * *"
+  # -- CronJob timezone. Defaults to `timezone`
+  timeZone: ""
+  # -- rclone destination as `<remote>:<path>`, e.g. `b2:my-bucket/wallos`,
+  # `s3:bucket/prefix`, `sftp:backups/wallos`. Each run uploads one
+  # `<fullname>-<UTC timestamp>.tar.gz` holding `wallos.db` and `logos/`
+  destination: ""
+  # -- Environment for rclone. Define the remote named in `destination` with
+  # `RCLONE_CONFIG_<REMOTE>_*` variables (see https://rclone.org/docs/#config-file),
+  # any other rclone flag as `RCLONE_<FLAG>`
+  env: []
+    # - name: RCLONE_CONFIG_B2_TYPE
+    #   value: b2
+    # - name: RCLONE_CONFIG_B2_ACCOUNT
+    #   valueFrom:
+    #     secretKeyRef:
+    #       name: wallos-backup
+    #       key: account
+    # - name: RCLONE_CONFIG_B2_KEY
+    #   valueFrom:
+    #     secretKeyRef:
+    #       name: wallos-backup
+    #       key: key
+  # -- Environment for rclone from whole Secrets/ConfigMaps, e.g. one holding
+  # all the `RCLONE_CONFIG_*` keys
+  envFrom: []
+  retention:
+    # -- If set, delete archives older than this after each upload (rclone
+    # duration, e.g. `30d`). Leave empty to let the backend handle retention,
+    # e.g. with bucket lifecycle rules -- on versioned backends such as B2,
+    # `rclone delete` only hides files
+    minAge: ""
+  rclone:
+    image:
+      # -- rclone image repository
+      repository: rclone/rclone
+      # -- rclone image tag
+      tag: "1.75.1"
+      # -- rclone image pull policy
+      pullPolicy: IfNotPresent
+    # -- Extra arguments for every rclone invocation
+    extraArgs: []
+  # -- Pod security context for the backup job. It only reads the data volume,
+  # so it runs unprivileged as the image's www-data (82)
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 82
+    runAsGroup: 82
+    seccompProfile:
+      type: RuntimeDefault
+  # -- Container security context for the backup job
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: ["ALL"]
+  # -- Resources for each backup container
+  resources: {}
+  # -- Retries before a run is marked failed
+  backoffLimit: 1
+  # -- Hard time limit for a run, in seconds
+  activeDeadlineSeconds: 1800
+  # -- Successful jobs to keep
+  successfulJobsHistoryLimit: 1
+  # -- Failed jobs to keep
+  failedJobsHistoryLimit: 3
+  # -- Node selector for the backup job. Defaults to `nodeSelector`
+  nodeSelector: {}
+  # -- Tolerations for the backup job. Defaults to `tolerations`
+  tolerations: []
+  # -- Affinity for the backup job. Defaults to preferring the node running
+  # Wallos, where a ReadWriteOnce volume is mountable
+  affinity: {}

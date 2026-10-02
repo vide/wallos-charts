@@ -1,0 +1,8 @@
+# Exercised by `ct install`: renders and installs the backup CronJob against a
+# throwaway local rclone remote.
+backup:
+  enabled: true
+  destination: local:/work/dest
+  env:
+    - name: RCLONE_CONFIG_LOCAL_TYPE
+      value: local

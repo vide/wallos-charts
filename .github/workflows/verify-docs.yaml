@@ -1,24 +1,32 @@
-name: Verify Helm Docs
+---
+name: Lint and Test
 
 on:
   pull_request:
     paths:
-      - 'charts/*/values.yaml'
-      - 'charts/*/Chart.yaml'
+      - 'charts/**'
+      - '.github/workflows/**'
+  push:
+    branches:
+      - main
+    paths:
+      - 'charts/**'
+      - '.github/workflows/**'
 
 jobs:
-  verify-helm-docs:
+  docs:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
 
       - name: Install helm-docs
         run: |
-          wget -O helm-docs.deb https://github.com/norwoodj/helm-docs/releases/download/v1.11.0/helm-docs_1.11.0_linux_amd64.deb
+          wget -qO helm-docs.deb https://github.com/norwoodj/helm-docs/releases/download/v1.14.2/helm-docs_1.14.2_Linux_x86_64.deb
           sudo dpkg -i helm-docs.deb
 
+      # Same arguments as the pre-commit hook.
       - name: Generate docs
-        run: helm-docs
+        run: helm-docs --chart-search-root=charts --template-files=README.md.gotmpl --output-file=../../README.md
 
       - name: Verify no changes
         run: |
@@ -27,3 +35,26 @@ jobs:
             git diff
             exit 1
           fi
+
+  lint-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: azure/setup-helm@v5
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.x'
+
+      - uses: helm/chart-testing-action@v2.8.0
+
+      - name: Lint
+        run: ct lint --all --validate-maintainers=false
+
+      - uses: helm/kind-action@v1.15.0
+
+      - name: Install
+        run: ct install --all

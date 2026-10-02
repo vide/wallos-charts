@@ -1,16 +1,22 @@
+{{- if .Values.ingress.enabled }}
 ---
-{{- if .Values.ingress.enabled -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ .Release.Name }}
+  name: {{ include "wallos.fullname" . }}
+  labels:
+    {{- include "wallos.labels" . | nindent 4 }}
   {{- with .Values.ingress.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
-  {{- if .Values.ingress.className }}
-  ingressClassName: {{ .Values.ingress.className }}
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
   {{- end }}
   rules:
     {{- range .Values.ingress.hosts }}
@@ -22,7 +28,7 @@ spec:
             pathType: {{ .pathType }}
             backend:
               service:
-                name: {{ $.Release.Name }}
+                name: {{ include "wallos.fullname" $ }}
                 port:
                   name: http
           {{- end }}

@@ -1,0 +1,30 @@
+Wallos {{ include "wallos.imageTag" . }} is starting. On first boot it creates (or migrates) the database.
+
+{{- if .Values.ingress.enabled }}
+
+Open:
+{{- range .Values.ingress.hosts }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}/
+{{- end }}
+{{- else }}
+
+Reach it with:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "wallos.fullname" . }} 8282:{{ .Values.service.port }}
+  open http://localhost:8282/
+{{- end }}
+
+{{- if not .Values.persistence.enabled }}
+
+WARNING: persistence is disabled. The database lives in an emptyDir and is
+lost whenever the pod is replaced.
+{{- else }}
+
+Data: PVC {{ include "wallos.claimName" . }} (db/ and logos/).
+{{- end }}
+
+{{- if .Values.backup.enabled }}
+
+Backups: CronJob {{ include "wallos.fullname" . }}-backup ("{{ .Values.backup.schedule }}") -> {{ .Values.backup.destination }}
+Run one now:
+  kubectl -n {{ .Release.Namespace }} create job --from=cronjob/{{ include "wallos.fullname" . }}-backup {{ include "wallos.fullname" . }}-backup-manual
+{{- end }}

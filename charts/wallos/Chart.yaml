@@ -1,10 +1,15 @@
 apiVersion: v2
 name: wallos
-description: A Helm chart for the Wallos subscription manager.
+description: A Helm chart for the Wallos subscription manager, with persistent storage and optional rclone backups.
 type: application
-version: 0.1.3
-appVersion: "2.41.0"
-home: https://github.com/ellite/wallos
+version: 1.0.0
+appVersion: "5.8.3"
+kubeVersion: ">=1.27.0-0"
+home: https://github.com/vide/wallos-charts
+icon: https://raw.githubusercontent.com/ellite/Wallos/main/images/icon/android-chrome-192x192.png
+sources:
+  - https://github.com/vide/wallos-charts
+  - https://github.com/ellite/Wallos
 maintainers:
   - name: Davide Ferrari
     email: vide@fastmail.com
@@ -15,3 +20,11 @@ keywords:
   - finance
   - self-hosted
   - PHP
+annotations:
+  artifacthub.io/changes: |
+    - kind: fixed
+      description: Persist the paths Wallos actually uses (db/ and images/uploads/logos/); 0.x mounted an unused directory and lost all data on every restart
+    - kind: changed
+      description: Pin the image to appVersion instead of latest, Recreate strategy, health probes, standard app.kubernetes.io labels
+    - kind: added
+      description: Optional backup CronJob shipping a validated SQLite snapshot plus logos to any rclone backend
